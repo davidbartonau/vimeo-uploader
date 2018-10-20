@@ -54,7 +54,8 @@ class Uploader:
             self.EMAIL_USER = settings.get('email_user', '')
             self.EMAIL_PASSWORD = settings.get('email_password', '')
             self.REPORT_EMAIL = settings.get('email_address', '')
-            self.REPORT_EMAIL_FROM = settings.get('email_origin', '')
+            self.SMTP_SERVER = settings.get('smtp_server', '')
+            self.SMTP_PORT = settings.get('smtp_port', 0)
 
             self.ENCODER = settings.get('encoder', '')
             self.OUTPUT_EXT = settings.get('output_ext', '')
@@ -125,7 +126,8 @@ class Uploader:
 
     def __can_email(self):
         return self.EMAIL_PASSWORD and self.EMAIL_USER and \
-            self.REPORT_EMAIL and self.REPORT_EMAIL_FROM
+            self.REPORT_EMAIL and self.SMTP_SERVER and \
+            self.SMTP_PORT > 0
 
     async def send_email(self, subject, message):
         if TEST_MODE:
@@ -142,11 +144,11 @@ class Uploader:
             msg = EmailMessage()
             msg.set_content(message)
             msg['subject'] = subject
-            msg['From'] = self.REPORT_EMAIL_FROM
+            msg['From'] = self.EMAIL_USER
             msg['To'] = self.REPORT_EMAIL
 
             # Send the message via our own SMTP server.
-            s = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+            s = smtplib.SMTP_SSL(self.SMTP_SERVER, self.SMTP_PORT)
             s.ehlo()
             s.login(self.EMAIL_USER, self.EMAIL_PASSWORD)
             s.send_message(msg)
