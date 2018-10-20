@@ -1,105 +1,280 @@
 import vimeo
+import asyncio
 import os
+import shutil
 import sys
-import subprocess
 import time
-from datetime import datetime, timedelta
-import uuid
+import re
+import subprocess
+from uuid import uuid4
+import logging
+# Import smtplib for the actual sending function
+import smtplib
+import yaml
 
-# Chage this settings ===================================================================
-# =======================================================================================
-
-access_token2 = 'e97ad346d2d8a7e849aa991b7f9534b6'
-client_id2 = '09b45375e54312c19d52d8c07795830c0e4680cb'
-client_secret2 = 'q2XRLP36tItFS9qKjf4QNFBxRE82m2w602TmTuAQYbRn3nEnsE8xwqcok9ztevRlaNyrJ+A0gqAHT5QtnepPiL+RFmTvXfLO4sAugSNWPbdWZzxCCkNKvVss3VQdsOHq'
-
-recording_folder = os.path.abspath('/home/osboxes/Desktop/uploader/')
-
-processed_folder = os.path.join(recording_folder, 'processed/')
-uploaded_folder = os.path.join(recording_folder, 'uploaded/')
-unprocessed_folder = os.path.join(recording_folder, 'unprocessed/')
-
-# =========================================================================================
-# =========================================================================================
-
-wait_seconds_b4_upload = 15  # seconds
+# Import the email modules we'll need
+from email.message import EmailMessage
 
 
-def main():
-    os.makedirs(processed_folder, exist_ok=True)
-    os.makedirs(uploaded_folder, exist_ok=True)
-    os.makedirs(unprocessed_folder, exist_ok=True)
+# Need to change this to point to conf file. e.g /etc/uploader.conf
+SETTINGS_FILE = './uploader.conf'
 
-    v = vimeo.VimeoClient(
-        token=access_token2,
-        key=client_id2,
-        secret=client_secret2
-    )
+TEST_MODE = False
 
-    while True:
+# Custom exception/error classes
+class SettingsFileNotFound(Exception):
+    pass
 
-        time.sleep(5)
 
-        print('Looking for files in {}'.format(
-            os.path.abspath(recording_folder)))
+class CannotConvertVideoFile(Exception):
+    pass
 
-        for vid in os.listdir(recording_folder):
 
-            fullname = os.path.join(recording_folder, vid)
-            fname, ext = os.path.splitext(vid)
+class CannotUploadVideoFile(Exception):
+    pass
 
+
+class InvalidCredentialsError(Exception):
+    pass
+
+
+class Uploader:
+
+    def __init__(self, settings_file):
+        if not os.path.exists(settings_file):
+            raise SettingsFileNotFound()
+
+        with open(settings_file, 'rt') as y:
+            settings = yaml.load(y)
+
+            self.CLIENT_ID = settings.get('client_id', '')
+            self.CLIENT_SECRET = settings.get('client_secret', '')
+            self.CLIENT_ACCESS_TOKEN = settings.get('client_access_token', '')
+
+            self.EMAIL_USER = settings.get('email_user', '')
+            self.EMAIL_PASSWORD = settings.get('email_password', '')
+            self.REPORT_EMAIL = settings.get('email_address', '')
+            self.REPORT_EMAIL_FROM = settings.get('email_origin', '')
+
+            self.ENCODER = settings.get('encoder', '')
+            self.OUTPUT_EXT = settings.get('output_ext', '')
+            self.PRESET = settings.get('preset', '')
+
+            self.MONITOR_FOLDER = settings.get('monitor_folder', '')
+            self.UNPROCESSED = settings.get('unprocessed_folder', '')
+            self.PROCESSED = settings.get('processed_folder', '')
+            self.UPLOADED = settings.get('uploaded_folder', '')
+            self.ORIGINALS = settings.get('originals_folder', '')
+            # Number of seconds to wait before processing the file.
+            # This is a simple check to determine if the we are done recording.
+            # A video file modified within less that a second means that it is currently being edited/recorded
+            self.UPLOAD_DELAY = settings.get('upload_delay', 5)
+
+        self.v = vimeo.VimeoClient(
+            token=self.CLIENT_ACCESS_TOKEN,
+            key=self.CLIENT_ID,
+            secret=self.CLIENT_SECRET
+        )
+
+        os.makedirs(self.UNPROCESSED, exist_ok=True)
+        os.makedirs(self.PROCESSED, exist_ok=True)
+        os.makedirs(self.UPLOADED, exist_ok=True)
+        os.makedirs(self.ORIGINALS, exist_ok=True)
+
+    def __get_encoder_command(self, input_file, output_file):
+        return [
+            a.replace(
+                '{input_file}', input_file).replace(
+                    '{output_file}', output_file).replace(
+                        '{preset}', self.PRESET) for a in self.ENCODER.split(' ') if a and a != '']
+
+    def __check(self):
+        if self.CLIENT_ACCESS_TOKEN == '' or \
+                self.CLIENT_SECRET == '' or \
+                self.CLIENT_ID == '':
+
+            raise InvalidCredentialsError()
+
+    async def copy_file(self, source, destination):
+        try:
+            # If the file is present in the destination,
+            # Delete it first
+            logging.info('Copying file from {} to {}'.format(
+                source, destination))
+            if os.path.exists(destination):
+                os.remove(destination)
+
+            shutil.copyfile(source, destination)
+            return destination
+        except:
+            pass
+
+    async def move_file(self, source, destination):
+        try:
+            # If the file is present in the destination,
+            # Delete it first
+            logging.info('Moving file from {} to {}'.format(
+                source, destination))
+            if os.path.exists(destination):
+                os.remove(destination)
+
+            os.rename(source, destination)
+            return destination
+        except:
+            pass
+
+    def __can_email(self):
+        return self.EMAIL_PASSWORD and self.EMAIL_USER and \
+            self.REPORT_EMAIL and self.REPORT_EMAIL_FROM
+
+    async def send_email(self, subject, message):
+        if TEST_MODE:
+            logging.info("Email sent: {}".format(message))
+            return
+
+        if not self.__can_email():
+            logging.warning('Cannot send email. No email credentials found.')
+            return
+
+        try:
+            logging.info('Sending email message \"{}\" to \"{}\"'.format(
+                message, self.REPORT_EMAIL))
+            msg = EmailMessage()
+            msg.set_content(message)
+            msg['subject'] = subject
+            msg['From'] = self.REPORT_EMAIL_FROM
+            msg['To'] = self.REPORT_EMAIL
+
+            # Send the message via our own SMTP server.
+            s = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+            s.ehlo()
+            s.login(self.EMAIL_USER, self.EMAIL_PASSWORD)
+            s.send_message(msg)
+            s.quit()
+        except:
+            pass
+
+    async def convert(self, source_video):
+
+        logging.info('Converting video: ' + source_video)
+
+        basename = os.path.basename(source_video)
+        fname, ext = os.path.splitext(basename)
+
+        destination_if_success = os.path.join(
+            self.PROCESSED, fname + self.OUTPUT_EXT)
+        if os.path.exists(destination_if_success):
+            os.remove(destination_if_success)
+
+        completed_proc = subprocess.run(
+            self.__get_encoder_command(source_video, destination_if_success)
+        )
+
+        # Do convert, if success
+        # return await self.move_file(source_video, destination_if_success)
+        # Else
+
+        # If the file is not in the destination,
+        # it means it was not converted, therefore we move it to unprocess folder
+        if not os.path.exists(destination_if_success):
+            logging.error('Cannot convert file: ' + source_video)
+            await self.move_file(source_video, os.path.join(self.UNPROCESSED, basename))
+        else:
+            return await self.move_file(source_video, destination_if_success)
+
+    async def upload(self, source_video):
+        title = os.path.basename(source_video)
+        logging.info('Uploading video: \"{}\"'.format(source_video))
+        try:
+            r = self.v.upload(source_video, data={
+                              'name': title, 'description': title})
+            # If success
+            # Move the file to uploaded folder
+            basename = os.path.basename(source_video)
+            destination = os.path.join(self.UPLOADED, basename)
+            d = await self.move_file(source_video, destination)
+            return d
+        except Exception as e:
+            logging.error('Video was not uploaded [{}]'.format(source_video))
+            logging.error('Reason: ' + str(e))
+
+    async def last_modified(self, original):
+        last_mod = os.path.getmtime(original)
+        now_time = time.time()
+        return now_time - last_mod
+
+    async def run(self):
+
+        logging.info('Running Vimeo uploader.')
+        logging.info('Monitoring folder: {}'.format(
+            os.path.abspath(self.MONITOR_FOLDER)))
+
+        self.__check()
+
+        while True:
             try:
-                if ext in ['.mp4', '.mkv', '.avi', '.ogv']:
-                    last_mod = os.path.getmtime(fullname)
-                    now_time = time.time()
+                logging.info('I am alive !')
+                await asyncio.sleep(1)
+                # list all files inside the MONITOR_FOLDER directory
+                for f in os.listdir(self.MONITOR_FOLDER):
+                    fname, ext = os.path.splitext(f)
+                    # Support only the following video file types
+                    if not ext in ['.ogv', '.mkv', '.mp4']:
+                        continue
 
-                    delta = now_time - last_mod
-                    print(
-                        'File {} was last modified in {} second(s)'.format(vid, delta))
+                    logging.info('found file: %s' % (fname, ))
+                    original = os.path.join(self.MONITOR_FOLDER, f)
 
-                    if delta > wait_seconds_b4_upload:  # 1 minute
+                    past_seconds = await self.last_modified(original)
+                    if past_seconds < self.UPLOAD_DELAY:
+                        logging.info(
+                            'Waiting to complete recording of {}. Time left is {:.0f} sec/s: '.format(
+                                f, self.UPLOAD_DELAY - past_seconds)
+                        )
+                        continue
 
-                        # Do convert
-                        random = str(uuid.uuid4()).split('-')[0]
+                    await self.copy_file(original, os.path.join(
+                        self.ORIGINALS, os.path.basename(original)))
 
-                        destination = os.path.join(
-                            processed_folder, fname + '_' + random + '.mkv')
+                    converted = await self.convert(original)
+                    if not converted:
+                        await self.send_email(
+                            "VIMEO VIDEO NOT CONVERTED",
+                            'A video with filename {} was not converted'.format(
+                                f)
+                        )
+                        continue
 
-                        print("converting video from '{}'\n\tto '{}'".format(
-                            fullname, destination))
+                    UPLOADED = await self.upload(converted)
+                    if not UPLOADED:
+                        await self.send_email(
+                            "VIMEO - VIDEO NOT UPLOADED",
+                            'A video with filename {} was not UPLOADED'.format(
+                                f)
+                        )
+                        continue
 
-                        subprocess.run(['HandBrakeCLI', '-i', fullname, '-o',
-                                        destination, '-Z', "H.264 MKV 1080p30"])
-
-                        if not os.path.exists(destination):
-                            raise Exception()
-
-                        os.remove(fullname)
-                        try:
-                            print('\nUploading video {}...'.format(vid))
-                            r = v.upload(destination)
-                        except Exception as e:
-                            print('Unable to upload video.')
-                            print(e)
-                            continue
-
-                        os.rename(destination, os.path.join(
-                            uploaded_folder, os.path.basename(destination)))
-                        print('done uploading ' + vid)
-
+                    logging.info(
+                        'Video \"{}\" successfully UPLOADED.'.format(f))
             except Exception as ex:
-                print('Something went wrong while processing {}'.format(vid))
-                print(ex)
-                if os.path.exists(destination):
-                    os.remove(fullname)
-                else:
-                    if os.path.exists(fullname):
-                        os.rename(fullname, os.path.join(
-                            unprocessed_folder, os.path.basename(destination)))
-
-            finally:
-                sys.stdout.flush()
+                logging.warning('Loop error.\n' + str(ex))
 
 
 if __name__ == '__main__':
-    main()
+
+    logging.basicConfig(level=logging.INFO)
+
+    try:
+        uploader = Uploader(SETTINGS_FILE)
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(uploader.run())
+    except SettingsFileNotFound:
+        logging.warning('Settings file not found!')
+    except KeyboardInterrupt:
+        logging.warning('Program interrupted by user [KeyboardInterrupt]')
+    except Exception as ee:
+        logging.warning('Main error')
+        uploader.send_email(
+            "VIMEO UPLOADER",
+            'Main program ended with reason\n' + str(ee)
+        )
