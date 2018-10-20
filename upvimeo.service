@@ -1,0 +1,15 @@
+[Unit]
+Description=Vimeo Automatic Uploader
+After=network.target multi-user.target
+
+[Service]
+Type=simple
+#User=fooservice
+#WorkingDirectory={{ venv_home }}
+ExecStart=/home/osboxes/Desktop/uploader/env/bin/python /home/osboxes/Desktop/uploader/uploader.py
+Restart=on-abort
+StandardOutput=journal
+#EnvironmentFile=/etc/sysconfig/fooservice.env
+
+[Install]
+WantedBy=multi-user.target
