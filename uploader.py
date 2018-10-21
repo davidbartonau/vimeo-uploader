@@ -41,6 +41,8 @@ class InvalidCredentialsError(Exception):
 class Uploader:
 
     def __init__(self, settings_file):
+        logging.info('Initialising from settings: ' + settings_file)
+
         if not os.path.exists(settings_file):
             raise SettingsFileNotFound()
 
@@ -267,7 +269,11 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
 
     try:
-        uploader = Uploader(SETTINGS_FILE)
+        if len(sys.argv) > 1:
+            uploader = Uploader(sys.argv[1])
+        else:
+            uploader = Uploader(SETTINGS_FILE)
+
         loop = asyncio.get_event_loop()
         loop.run_until_complete(uploader.run())
     except SettingsFileNotFound:
