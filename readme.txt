@@ -17,6 +17,7 @@ python3 -m virtualenv env
 pip install -r requirements.txt
 
 pip install PyVimeo
+pip install pyyaml
 
 # For start/boot settings, 
 # Need to edit the file 'upvimeo.service' to match your directory structure
@@ -28,8 +29,13 @@ sudo systemctl daemon-reload
 sudo systemctl enable upvimeo.service
 sudo systemctl start upvimeo
 
-# or run in command line first so we can see its output, [do not as service yet]
+# Set up your config
+cp uploader.conf /etc/vimeo-uploader.conf
 
-python uploader.py
+vi /etc/vimeo-uploader.conf
+
+
+# or run in command line first so we can see its output, [do not as service yet]
+python3 uploader.py /etc/vimeo-uploader.conf
 
 
