@@ -4,6 +4,7 @@ import os
 import shutil
 import sys
 import time
+import datetime
 import re
 import subprocess
 from uuid import uuid4
@@ -72,6 +73,7 @@ class Uploader:
             # This is a simple check to determine if the we are done recording.
             # A video file modified within less that a second means that it is currently being edited/recorded
             self.UPLOAD_DELAY = settings.get('upload_delay', 5)
+            self.SLEEP_DELAY = settings.get('sleep_delay', 1)
 
         self.v = vimeo.VimeoClient(
             token=self.CLIENT_ACCESS_TOKEN,
@@ -217,8 +219,8 @@ class Uploader:
 
         while True:
             try:
-                logging.info('I am alive !')
-                await asyncio.sleep(1)
+                logging.info('I am alive ! ' + str(datetime.datetime.now()))
+                await asyncio.sleep(self.SLEEP_DELAY)
                 # list all files inside the MONITOR_FOLDER directory
                 for f in os.listdir(self.MONITOR_FOLDER):
                     fname, ext = os.path.splitext(f)
