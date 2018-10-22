@@ -15,7 +15,7 @@ cp uploader.conf /etc/vimeo-uploader.conf
 
 vi /etc/vimeo-uploader.conf
 
-# run in command line first so we can see its output, [do not as service yet]
+# run in command line first so we can see its output, [do not run as service yet]
 python3 uploader.py /etc/vimeo-uploader.conf
 ```
 
@@ -27,20 +27,20 @@ sudo apt install libcurl4-openssl-dev
 sudo apt install python3-pip
 ```
 
-### Setup python virtual environment
+### Setting up python virtual environment
 ```
+# Install virtualenv wrapper
 python3 -m pip install --user virtualenv
 
 # cd into uploader directory
 
+# Create virtual environment
 python3 -m virtualenv env
 
 # activate virtual environment
-
 source ./env/bin/activate
 
 # Install python dependencies
-
 pip install -r requirements.txt
 ```
 ## Run as a service
