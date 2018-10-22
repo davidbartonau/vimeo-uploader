@@ -27,7 +27,7 @@ sudo apt install libcurl4-openssl-dev
 sudo apt install python3-pip
 ```
 
-### Not sure if we need this
+### Setup python virtual environment
 ```
 python3 -m pip install --user virtualenv
 
@@ -35,12 +35,13 @@ python3 -m pip install --user virtualenv
 
 python3 -m virtualenv env
 
+# activate virtual environment
+
+source ./env/bin/activate
+
 # Install python dependencies
 
 pip install -r requirements.txt
-
-pip install PyVimeo
-pip install pyyaml
 ```
 ## Run as a service
 For start/boot settings, 
