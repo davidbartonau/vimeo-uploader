@@ -160,8 +160,9 @@ class Uploader:
             s.login(self.EMAIL_USER, self.EMAIL_PASSWORD)
             s.send_message(msg)
             s.quit()
-        except:
-            pass
+        except Exception as ex:
+            logging.error('Unable to send email. ' + str(ex))
+            
 
     async def convert(self, source_video):
 
