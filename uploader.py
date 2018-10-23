@@ -55,6 +55,7 @@ class Uploader:
             self.CLIENT_ID = settings.get('client_id', '')
             self.CLIENT_SECRET = settings.get('client_secret', '')
             self.CLIENT_ACCESS_TOKEN = settings.get('client_access_token', '')
+            self.VIDEO_PASSWORD = settings.get('video_password', '')
 
             self.EMAIL_USER = settings.get('email_user', '')
             self.EMAIL_PASSWORD = settings.get('email_password', '')
@@ -195,11 +196,16 @@ class Uploader:
         logging.info('Uploading video: \"{}\"'.format(source_video))
         try:
             privacy = {
-                'download': True,
-                'view': 'anybody'
+                'view': 'password'
             }
-            r = self.v.upload(source_video, data={
-                              'name': title, 'description': title, 'privacy': privacy})
+
+            r = self.v.upload(
+                source_video, data={
+                    'name': title,
+                    'description': title,
+                    'password': self.VIDEO_PASSWORD,
+                    'privacy': privacy
+                })
             # If success
             # Move the file to uploaded folder
             basename = os.path.basename(source_video)
