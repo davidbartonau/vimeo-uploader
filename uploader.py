@@ -23,6 +23,8 @@ SETTINGS_FILE = './uploader.conf'
 TEST_MODE = False
 
 # Custom exception/error classes
+
+
 class SettingsFileNotFound(Exception):
     pass
 
@@ -192,8 +194,12 @@ class Uploader:
         title = os.path.basename(source_video)
         logging.info('Uploading video: \"{}\"'.format(source_video))
         try:
+            privacy = {
+                'download': True,
+                'view': 'anybody'
+            }
             r = self.v.upload(source_video, data={
-                              'name': title, 'description': title})
+                              'name': title, 'description': title, 'privacy': privacy})
             # If success
             # Move the file to uploaded folder
             basename = os.path.basename(source_video)
