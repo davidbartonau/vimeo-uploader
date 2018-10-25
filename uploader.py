@@ -106,10 +106,11 @@ class Uploader:
         try:
             # If the file is present in the destination,
             # Delete it first
+            if os.path.exists(destination):
+                logging.info('Before copying, we must remove file {}'.format(destination))
+                os.remove(destination)
             logging.info('Copying file from {} to {}'.format(
                 source, destination))
-            if os.path.exists(destination):
-                os.remove(destination)
 
             shutil.copyfile(source, destination)
             return destination
@@ -120,10 +121,11 @@ class Uploader:
         try:
             # If the file is present in the destination,
             # Delete it first
+            if os.path.exists(destination):
+                logging.info('Before moving, we must remove file {}'.format(destination))
+                os.remove(destination)
             logging.info('Moving file from {} to {}'.format(
                 source, destination))
-            if os.path.exists(destination):
-                os.remove(destination)
 
             os.rename(source, destination)
             return destination
@@ -172,11 +174,13 @@ class Uploader:
         destination_if_success = os.path.join(
             self.PROCESSED, fname + self.OUTPUT_EXT)
         if os.path.exists(destination_if_success):
+            logging.info('Removing file {}'.format(destination_if_success))
             os.remove(destination_if_success)
 
-        completed_proc = subprocess.run(
-            self.__get_encoder_command(source_video, destination_if_success)
-        )
+        encoder_command = self.__get_encoder_command(source_video, destination_if_success)
+        logging.info('Running encoder {}'.format(encoder_command))
+
+        completed_proc = subprocess.run(encoder_command)
 
         # Do convert, if success
         # return await self.move_file(source_video, destination_if_success)
@@ -249,9 +253,6 @@ class Uploader:
                         )
                         continue
 
-                    await self.copy_file(original, os.path.join(
-                        self.ORIGINALS, os.path.basename(original)))
-
                     converted = await self.convert(original)
                     if not converted:
                         await self.send_email(
@@ -274,6 +275,10 @@ class Uploader:
 
                     logging.info(
                         'Video \"{}\" successfully UPLOADED.'.format(f))
+
+                    await self.move_file(original, os.path.join(
+                        self.ORIGINALS, os.path.basename(original)))
+
             except Exception as ex:
                 logging.warning('Loop error.\n' + str(ex))
 
