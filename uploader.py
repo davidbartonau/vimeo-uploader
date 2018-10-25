@@ -107,7 +107,8 @@ class Uploader:
             # If the file is present in the destination,
             # Delete it first
             if os.path.exists(destination):
-                logging.info('Before copying, we must remove file {}'.format(destination))
+                logging.info(
+                    'Before copying, we must remove file {}'.format(destination))
                 os.remove(destination)
             logging.info('Copying file from {} to {}'.format(
                 source, destination))
@@ -122,7 +123,8 @@ class Uploader:
             # If the file is present in the destination,
             # Delete it first
             if os.path.exists(destination):
-                logging.info('Before moving, we must remove file {}'.format(destination))
+                logging.info(
+                    'Before moving, we must remove file {}'.format(destination))
                 os.remove(destination)
             logging.info('Moving file from {} to {}'.format(
                 source, destination))
@@ -173,11 +175,14 @@ class Uploader:
 
         destination_if_success = os.path.join(
             self.PROCESSED, fname + self.OUTPUT_EXT)
+
+        # remove existing file in the destination
         if os.path.exists(destination_if_success):
             logging.info('Removing file {}'.format(destination_if_success))
             os.remove(destination_if_success)
 
-        encoder_command = self.__get_encoder_command(source_video, destination_if_success)
+        encoder_command = self.__get_encoder_command(
+            source_video, destination_if_success)
         logging.info('Running encoder {}'.format(encoder_command))
 
         completed_proc = subprocess.run(encoder_command)
@@ -260,8 +265,7 @@ class Uploader:
                             'A video with filename {} was not converted'.format(
                                 f)
                         )
-                        # delete original video
-                        os.remove(original)
+
                         continue
 
                     UPLOADED = await self.upload(converted)
@@ -275,6 +279,11 @@ class Uploader:
 
                     logging.info(
                         'Video \"{}\" successfully UPLOADED.'.format(f))
+
+                    await self.send_email(
+                        "VIMEO UPLOAD SUCCESS!",
+                        'A video with filename {} was successfully UPLOADED to vimeo'.format(
+                            f))
 
                     await self.move_file(original, os.path.join(
                         self.ORIGINALS, os.path.basename(original)))
