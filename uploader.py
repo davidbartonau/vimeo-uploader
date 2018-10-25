@@ -194,7 +194,7 @@ class Uploader:
             logging.error('Cannot convert file: ' + source_video)
             await self.move_file(source_video, os.path.join(self.UNPROCESSED, basename))
         else:
-            return await self.move_file(source_video, destination_if_success)
+            return True
 
     async def upload(self, source_video):
         title = os.path.basename(source_video)
@@ -256,9 +256,6 @@ class Uploader:
                         )
                         continue
 
-                    await self.copy_file(original, os.path.join(
-                        self.ORIGINALS, os.path.basename(original)))
-
                     converted = await self.convert(original)
                     if not converted:
                         await self.send_email(
@@ -279,6 +276,10 @@ class Uploader:
 
                     logging.info(
                         'Video \"{}\" successfully UPLOADED.'.format(f))
+
+                    await self.move_file(original, os.path.join(
+                        self.ORIGINALS, os.path.basename(original)))
+
             except Exception as ex:
                 logging.warning('Loop error.\n' + str(ex))
 
