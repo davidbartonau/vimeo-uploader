@@ -1,5 +1,8 @@
+uploader.conf
+
 env/
 processed/
 unprocessed/
 uploaded/
 originals/
+
