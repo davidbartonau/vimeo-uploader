@@ -60,6 +60,7 @@ class Uploader:
             self.EMAIL_USER = settings.get('email_user', '')
             self.EMAIL_PASSWORD = settings.get('email_password', '')
             self.REPORT_EMAIL = settings.get('email_address', '')
+            self.EMAIL_ORIGIN = settings.get('email_origin', '')
             self.SMTP_SERVER = settings.get('smtp_server', '')
             self.SMTP_PORT = settings.get('smtp_port', 0)
 
@@ -68,7 +69,6 @@ class Uploader:
             self.PRESET = settings.get('preset', '')
 
             self.MONITOR_FOLDER = settings.get('monitor_folder', '')
-            self.UNPROCESSED = settings.get('unprocessed_folder', '')
             self.PROCESSED = settings.get('processed_folder', '')
             self.UPLOADED = settings.get('uploaded_folder', '')
             self.ORIGINALS = settings.get('originals_folder', '')
@@ -84,7 +84,6 @@ class Uploader:
             secret=self.CLIENT_SECRET
         )
 
-        os.makedirs(self.UNPROCESSED, exist_ok=True)
         os.makedirs(self.PROCESSED, exist_ok=True)
         os.makedirs(self.UPLOADED, exist_ok=True)
         os.makedirs(self.ORIGINALS, exist_ok=True)
@@ -134,7 +133,7 @@ class Uploader:
     def __can_email(self):
         return self.EMAIL_PASSWORD and self.EMAIL_USER and \
             self.REPORT_EMAIL and self.SMTP_SERVER and \
-            self.SMTP_PORT > 0
+            self.SMTP_PORT > 0 and self.EMAIL_ORIGIN
 
     async def send_email(self, subject, message):
         if TEST_MODE:
@@ -151,7 +150,7 @@ class Uploader:
             msg = EmailMessage()
             msg.set_content(message)
             msg['subject'] = subject
-            msg['From'] = self.EMAIL_USER
+            msg['From'] = self.EMAIL_ORIGIN
             msg['To'] = self.REPORT_EMAIL
 
             # Send the message via our own SMTP server.
@@ -162,7 +161,6 @@ class Uploader:
             s.quit()
         except Exception as ex:
             logging.error('Unable to send email. ' + str(ex))
-            
 
     async def convert(self, source_video):
 
@@ -185,12 +183,11 @@ class Uploader:
         # Else
 
         # If the file is not in the destination,
-        # it means it was not converted, therefore we move it to unprocess folder
+        # it means it was not converted
         if not os.path.exists(destination_if_success):
             logging.error('Cannot convert file: ' + source_video)
-            await self.move_file(source_video, os.path.join(self.UNPROCESSED, basename))
         else:
-            return await self.move_file(source_video, destination_if_success)
+            return destination_if_success
 
     async def upload(self, source_video):
         title = os.path.basename(source_video)
@@ -262,6 +259,8 @@ class Uploader:
                             'A video with filename {} was not converted'.format(
                                 f)
                         )
+                        # delete original video
+                        os.remove(original)
                         continue
 
                     UPLOADED = await self.upload(converted)
