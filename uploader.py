@@ -244,7 +244,8 @@ class Uploader:
                 for f in os.listdir(self.MONITOR_FOLDER):
                     fname, ext = os.path.splitext(f)
                     # Support only the following video file types
-                    if not ext in ['.ogv', '.mkv', '.mp4']:
+                    if not ext in ['.ogv', '.mkv', '.mp4', '.flv', '.wmv']:
+                        logging.info('Skipping file {}'.format(str(f)))
                         continue
 
                     logging.info('found file: %s' % (fname, ))
